@@ -3,10 +3,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Wifi, Clock, Users, AlertTriangle, Phone, Mail, MessageCircle } from "lucide-react";
+import { Wifi, Clock, Users, AlertTriangle, Phone, Mail, MessageCircle, LogOut } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { PaymentOptions } from "./PaymentOptions";
 import { UserManagement } from "./UserManagement";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 
 interface User {
   id: string;
@@ -26,7 +28,8 @@ interface SystemStats {
 }
 
 export function WifiDashboard() {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const { user, profile, signOut } = useAuth();
+  const [currentSubscription, setCurrentSubscription] = useState<any>(null);
   const [showPayment, setShowPayment] = useState(false);
   const [showUserManagement, setShowUserManagement] = useState(false);
   const [stats, setStats] = useState<SystemStats>({
@@ -36,19 +39,39 @@ export function WifiDashboard() {
     totalRevenue: 850000
   });
 
-  // Mock current user for demo
   useEffect(() => {
-    // Simulate checking user status
-    const mockUser: User = {
-      id: "1",
-      name: "Guest User",
-      phone: "+256701234567",
-      plan: "daily",
-      status: "warning",
-      expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000), // 2 hours from now
-    };
-    setCurrentUser(mockUser);
-  }, []);
+    if (user) {
+      fetchCurrentSubscription();
+    }
+  }, [user]);
+
+  const fetchCurrentSubscription = async () => {
+    try {
+      const { data } = await supabase
+        .from('user_subscriptions')
+        .select(`
+          *,
+          subscription_plans (*)
+        `)
+        .eq('user_id', user?.id)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+      
+      setCurrentSubscription(data);
+    } catch (error) {
+      console.log('No active subscription found');
+    }
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+    toast({
+      title: 'Signed out',
+      description: 'You have been signed out successfully'
+    });
+  };
 
   const getTimeRemaining = (expiresAt: Date) => {
     const now = new Date();
@@ -77,71 +100,57 @@ export function WifiDashboard() {
       description: `Your ${plan} plan is now active. You will be connected automatically.`,
     });
     setShowPayment(false);
-    // Update user status
-    setCurrentUser(prev => prev ? {
-      ...prev,
-      status: "active",
-      plan: plan as any,
-      expiresAt: new Date(Date.now() + (plan === "daily" ? 24 : plan === "weekly" ? 168 : 720) * 60 * 60 * 1000)
-    } : null);
+    fetchCurrentSubscription(); // Refresh subscription data
   };
 
   return (
     <div className="min-h-screen bg-background p-4 space-y-6">
       {/* Header */}
-      <div className="text-center space-y-2">
-        <div className="flex items-center justify-center gap-2 mb-4">
-          <Wifi className="h-8 w-8 text-primary" />
-          <h1 className="text-3xl font-bold text-foreground">AroSoft WiFi</h1>
+      <div className="flex items-center justify-between">
+        <div className="text-center space-y-2">
+          <div className="flex items-center justify-center gap-2 mb-4">
+            <Wifi className="h-8 w-8 text-primary" />
+            <h1 className="text-3xl font-bold text-foreground">AroSoft WiFi</h1>
+          </div>
+          <p className="text-muted-foreground">Simple Internet Access for Everyone</p>
         </div>
-        <p className="text-muted-foreground">Simple Internet Access for Everyone</p>
+        <div className="flex items-center gap-4">
+          {profile && (
+            <>
+              <div className="text-right">
+                <p className="text-sm font-medium">{user?.email}</p>
+                <Badge variant="outline">{profile.role}</Badge>
+              </div>
+              <Button variant="outline" onClick={handleSignOut}>
+                <LogOut className="mr-2 h-4 w-4" />
+                Sign Out
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
-      {/* Current User Status */}
-      {currentUser && (
+      {/* Current Subscription Status */}
+      {currentSubscription && (
         <Card className="border-2">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg">Your Connection</CardTitle>
-              {getStatusBadge(currentUser.status)}
+              {currentSubscription.status === 'active' ? 
+                <Badge className="bg-wifi-connected text-white">Active</Badge> :
+                <Badge variant="secondary">{currentSubscription.status}</Badge>
+              }
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            {currentUser.status === "warning" && (
-              <div className="flex items-center gap-2 p-3 bg-warning/10 border border-warning/20 rounded-lg">
-                <AlertTriangle className="h-5 w-5 text-warning" />
-                <div className="flex-1">
-                  <p className="font-medium text-warning">Connection Expiring Soon!</p>
-                  {(() => {
-                    const { hours, minutes } = getTimeRemaining(currentUser.expiresAt);
-                    return (
-                      <p className="text-sm text-muted-foreground">
-                        {hours > 0 ? `${hours}h ${minutes}m` : `${minutes} minutes`} remaining
-                      </p>
-                    );
-                  })()}
-                </div>
-              </div>
-            )}
-            
-            {currentUser.status === "active" && (
+            {currentSubscription.expires_at && new Date(currentSubscription.expires_at) > new Date() && (
               <div className="flex items-center gap-2 p-3 bg-success/10 border border-success/20 rounded-lg">
                 <Wifi className="h-5 w-5 text-success" />
                 <div className="flex-1">
                   <p className="font-medium text-success">Connected to Internet</p>
                   <p className="text-sm text-muted-foreground">
-                    {currentUser.plan.charAt(0).toUpperCase() + currentUser.plan.slice(1)} plan active
+                    {currentSubscription.subscription_plans?.name} active
                   </p>
-                </div>
-              </div>
-            )}
-
-            {currentUser.status === "expired" && (
-              <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
-                <Clock className="h-5 w-5 text-destructive" />
-                <div className="flex-1">
-                  <p className="font-medium text-destructive">Connection Expired</p>
-                  <p className="text-sm text-muted-foreground">Purchase a plan to continue</p>
                 </div>
               </div>
             )}
@@ -149,11 +158,36 @@ export function WifiDashboard() {
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <p className="text-muted-foreground">Current Plan</p>
-                <p className="font-medium">{currentUser.plan.charAt(0).toUpperCase() + currentUser.plan.slice(1)}</p>
+                <p className="font-medium">{currentSubscription.subscription_plans?.name || 'No Plan'}</p>
               </div>
               <div>
                 <p className="text-muted-foreground">Expires</p>
-                <p className="font-medium">{currentUser.expiresAt.toLocaleDateString()}</p>
+                <p className="font-medium">
+                  {currentSubscription.expires_at ? 
+                    new Date(currentSubscription.expires_at).toLocaleDateString() : 
+                    'N/A'
+                  }
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {!currentSubscription && (
+        <Card className="border-2 border-warning/20">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg">No Active Subscription</CardTitle>
+              <Badge variant="outline">Inactive</Badge>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-2 p-3 bg-warning/10 border border-warning/20 rounded-lg">
+              <AlertTriangle className="h-5 w-5 text-warning" />
+              <div className="flex-1">
+                <p className="font-medium text-warning">No Internet Access</p>
+                <p className="text-sm text-muted-foreground">Purchase a plan to get connected</p>
               </div>
             </div>
           </CardContent>

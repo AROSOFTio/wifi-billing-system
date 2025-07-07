@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,7 @@ import {
   CheckCircle 
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 interface PaymentOptionsProps {
   onClose: () => void;
@@ -24,36 +25,18 @@ interface PaymentOptionsProps {
 interface Plan {
   id: string;
   name: string;
-  duration: string;
+  duration_hours: number;
   price: number;
   popular?: boolean;
   icon: React.ReactNode;
 }
 
-const plans: Plan[] = [
-  {
-    id: "daily",
-    name: "Daily Plan",
-    duration: "24 Hours",
-    price: 1000,
-    icon: <Clock className="h-6 w-6" />,
-  },
-  {
-    id: "weekly", 
-    name: "Weekly Plan",
-    duration: "7 Days",
-    price: 5000,
-    popular: true,
-    icon: <Calendar className="h-6 w-6" />,
-  },
-  {
-    id: "monthly",
-    name: "Monthly Plan", 
-    duration: "30 Days",
-    price: 18000,
-    icon: <CalendarDays className="h-6 w-6" />,
-  },
-];
+const getIconForPlan = (name: string) => {
+  if (name.toLowerCase().includes('daily')) return <Clock className="h-6 w-6" />;
+  if (name.toLowerCase().includes('weekly')) return <Calendar className="h-6 w-6" />;
+  if (name.toLowerCase().includes('monthly')) return <CalendarDays className="h-6 w-6" />;
+  return <Clock className="h-6 w-6" />;
+};
 
 const paymentMethods = [
   {
@@ -87,10 +70,40 @@ const paymentMethods = [
 ];
 
 export function PaymentOptions({ onClose, onPaymentSuccess }: PaymentOptionsProps) {
+  const [plans, setPlans] = useState<Plan[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
   const [selectedPayment, setSelectedPayment] = useState<string | null>(null);
   const [phoneNumber, setPhoneNumber] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+
+  useEffect(() => {
+    fetchPlans();
+  }, []);
+
+  const fetchPlans = async () => {
+    try {
+      const { data } = await supabase
+        .from('subscription_plans')
+        .select('*')
+        .eq('is_active', true)
+        .order('price', { ascending: true });
+
+      if (data) {
+        const formattedPlans = data.map((plan, index) => ({
+          ...plan,
+          popular: index === 1, // Make second plan popular
+          icon: getIconForPlan(plan.name)
+        }));
+        setPlans(formattedPlans);
+      }
+    } catch (error) {
+      toast({
+        title: 'Error loading plans',
+        description: 'Could not fetch subscription plans',
+        variant: 'destructive'
+      });
+    }
+  };
 
   const handlePlanSelect = (plan: Plan) => {
     setSelectedPlan(plan);
@@ -121,20 +134,28 @@ export function PaymentOptions({ onClose, onPaymentSuccess }: PaymentOptionsProp
 
     setIsProcessing(true);
     
-    // Simulate payment processing
     try {
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      
+      const { data, error } = await supabase.functions.invoke('process-payment', {
+        body: {
+          paymentMethod: selectedPayment,
+          planId: selectedPlan.id,
+          phoneNumber: phoneNumber,
+          amount: selectedPlan.price
+        }
+      });
+
+      if (error) throw error;
+
       toast({
         title: "Payment Successful!",
         description: `Your ${selectedPlan.name} has been activated. You will be connected automatically.`,
       });
       
       onPaymentSuccess(selectedPlan.id);
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Payment Failed",
-        description: "Please try again or contact support",
+        description: error.message || "Please try again or contact support",
         variant: "destructive",
       });
     } finally {
@@ -177,7 +198,7 @@ export function PaymentOptions({ onClose, onPaymentSuccess }: PaymentOptionsProp
                       {plan.icon}
                     </div>
                     <CardTitle className="text-lg">{plan.name}</CardTitle>
-                    <CardDescription>{plan.duration}</CardDescription>
+                    <CardDescription>{plan.duration_hours} Hours</CardDescription>
                   </CardHeader>
                   <CardContent className="text-center">
                     <div className="text-3xl font-bold text-primary mb-2">
@@ -259,7 +280,7 @@ export function PaymentOptions({ onClose, onPaymentSuccess }: PaymentOptionsProp
               <div className="bg-muted/50 p-4 rounded-lg mb-4">
                 <h4 className="font-semibold mb-2">Payment Summary</h4>
                 <div className="flex justify-between items-center">
-                  <span>{selectedPlan.name} ({selectedPlan.duration})</span>
+                  <span>{selectedPlan.name} ({selectedPlan.duration_hours} Hours)</span>
                   <span className="font-semibold">UGX {selectedPlan.price.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between items-center text-sm text-muted-foreground">
