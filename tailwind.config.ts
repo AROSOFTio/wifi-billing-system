@@ -32,6 +32,14 @@ export default {
 					DEFAULT: 'hsl(var(--secondary))',
 					foreground: 'hsl(var(--secondary-foreground))'
 				},
+				success: {
+					DEFAULT: 'hsl(var(--success))',
+					foreground: 'hsl(var(--success-foreground))'
+				},
+				warning: {
+					DEFAULT: 'hsl(var(--warning))',
+					foreground: 'hsl(var(--warning-foreground))'
+				},
 				destructive: {
 					DEFAULT: 'hsl(var(--destructive))',
 					foreground: 'hsl(var(--destructive-foreground))'
@@ -52,6 +60,16 @@ export default {
 					DEFAULT: 'hsl(var(--card))',
 					foreground: 'hsl(var(--card-foreground))'
 				},
+				// WiFi system specific colors
+				wifi: {
+					connected: 'hsl(var(--wifi-connected))',
+					disconnected: 'hsl(var(--wifi-disconnected))',
+					signal: 'hsl(var(--wifi-signal))'
+				},
+				// Payment method colors
+				mtn: 'hsl(var(--mtn))',
+				airtel: 'hsl(var(--airtel))',
+				visa: 'hsl(var(--visa))',
 				sidebar: {
 					DEFAULT: 'hsl(var(--sidebar-background))',
 					foreground: 'hsl(var(--sidebar-foreground))',
