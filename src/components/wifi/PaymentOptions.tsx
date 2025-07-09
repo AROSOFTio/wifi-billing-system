@@ -20,6 +20,7 @@ import { supabase } from "@/integrations/supabase/client";
 interface PaymentOptionsProps {
   onClose: () => void;
   onPaymentSuccess: (plan: string) => void;
+  deviceId: string;
 }
 
 interface Plan {
@@ -69,7 +70,7 @@ const paymentMethods = [
   },
 ];
 
-export function PaymentOptions({ onClose, onPaymentSuccess }: PaymentOptionsProps) {
+export function PaymentOptions({ onClose, onPaymentSuccess, deviceId }: PaymentOptionsProps) {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
   const [selectedPayment, setSelectedPayment] = useState<string | null>(null);
@@ -140,7 +141,8 @@ export function PaymentOptions({ onClose, onPaymentSuccess }: PaymentOptionsProp
           paymentMethod: selectedPayment,
           planId: selectedPlan.id,
           phoneNumber: phoneNumber,
-          amount: selectedPlan.price
+          amount: selectedPlan.price,
+          deviceId: deviceId
         }
       });
 

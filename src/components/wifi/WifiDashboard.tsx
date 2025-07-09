@@ -285,6 +285,7 @@ export function WifiDashboard() {
         <PaymentOptions 
           onClose={() => setShowPayment(false)}
           onPaymentSuccess={handlePaymentSuccess}
+          deviceId="admin_device"
         />
       )}
 

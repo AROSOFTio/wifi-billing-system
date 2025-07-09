@@ -23,21 +23,19 @@ serve(async (req) => {
       }
     )
 
-    const { paymentMethod, planId, phoneNumber, amount } = await req.json()
+    const { paymentMethod, planId, phoneNumber, amount, deviceId } = await req.json()
 
-    // Get user from auth
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
-      throw new Error('Unauthorized')
+    if (!deviceId) {
+      throw new Error('Device ID is required')
     }
 
-    console.log(`Processing payment for user ${user.id}, plan ${planId}, method ${paymentMethod}`)
+    console.log(`Processing payment for device ${deviceId}, plan ${planId}, method ${paymentMethod}`)
 
-    // Create payment record
+    // Create payment record (use device ID as user reference for now)
     const { data: payment, error: paymentError } = await supabase
-      .from('payments')
+      .from('device_payments')
       .insert({
-        user_id: user.id,
+        device_id: deviceId,
         amount: amount,
         payment_method: paymentMethod,
         status: 'pending',
@@ -74,7 +72,7 @@ serve(async (req) => {
     if (paymentResult.success) {
       // Update payment status
       await supabase
-        .from('payments')
+        .from('device_payments')
         .update({
           status: 'completed',
           payment_reference: paymentResult.reference
@@ -89,21 +87,21 @@ serve(async (req) => {
         .single()
 
       if (plan) {
-        // Create or update subscription
+        // Create or update device subscription
         const expiresAt = new Date(Date.now() + plan.duration_hours * 60 * 60 * 1000)
         
         await supabase
-          .from('user_subscriptions')
+          .from('device_subscriptions')
           .insert({
-            user_id: user.id,
+            device_id: deviceId,
             plan_id: planId,
             status: 'active',
             starts_at: new Date().toISOString(),
             expires_at: expiresAt.toISOString()
           })
 
-        // TODO: Connect to Mikrotik router to activate user
-        console.log(`Activating user ${user.id} on Mikrotik router until ${expiresAt}`)
+        // TODO: Connect to Mikrotik router to activate device
+        console.log(`Activating device ${deviceId} on Mikrotik router until ${expiresAt}`)
       }
 
       return new Response(
@@ -113,7 +111,7 @@ serve(async (req) => {
     } else {
       // Update payment status to failed
       await supabase
-        .from('payments')
+        .from('device_payments')
         .update({ status: 'failed' })
         .eq('id', payment.id)
 
