@@ -1,351 +1,301 @@
-import { useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { 
-  Users, 
-  Search, 
-  Filter,
-  MoreVertical,
-  UserPlus,
-  AlertTriangle,
-  CheckCircle,
-  Clock,
-  Wifi,
-  Phone
-} from "lucide-react";
-import { toast } from "@/hooks/use-toast";
-import { 
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { useState, useEffect } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Search, Wifi, Clock, Ban } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from '@/hooks/use-toast';
 
-interface UserManagementProps {
-  onClose: () => void;
-}
-
-interface User {
+interface DeviceSubscription {
   id: string;
-  name: string;
-  phone: string;
-  plan: "daily" | "weekly" | "monthly";
-  status: "active" | "expired" | "warning";
-  connectedAt?: Date;
-  expiresAt: Date;
-  totalPaid: number;
+  device_id: string;
+  status: string;
+  starts_at: string;
+  expires_at: string;
+  created_at: string;
+  subscription_plans: {
+    name: string;
+    price: number;
+  };
 }
 
-// Mock user data
-const mockUsers: User[] = [
-  {
-    id: "1",
-    name: "John Mugisha",
-    phone: "+256701234567",
-    plan: "weekly",
-    status: "active",
-    connectedAt: new Date(),
-    expiresAt: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
-    totalPaid: 15000,
-  },
-  {
-    id: "2", 
-    name: "Sarah Nakato",
-    phone: "+256702345678",
-    plan: "monthly",
-    status: "warning",
-    connectedAt: new Date(),
-    expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000),
-    totalPaid: 45000,
-  },
-  {
-    id: "3",
-    name: "Moses Kiprotich",
-    phone: "+256703456789", 
-    plan: "daily",
-    status: "expired",
-    expiresAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
-    totalPaid: 8000,
-  },
-  {
-    id: "4",
-    name: "Grace Auma",
-    phone: "+256704567890",
-    plan: "weekly", 
-    status: "active",
-    connectedAt: new Date(),
-    expiresAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
-    totalPaid: 12000,
-  },
-];
+interface DevicePayment {
+  id: string;
+  device_id: string;
+  amount: number;
+  payment_method: string;
+  status: string;
+  created_at: string;
+  metadata?: any;
+}
 
-export function UserManagement({ onClose }: UserManagementProps) {
-  const [users, setUsers] = useState<User[]>(mockUsers);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterStatus, setFilterStatus] = useState<string>("all");
+export function UserManagement() {
+  const [subscriptions, setSubscriptions] = useState<DeviceSubscription[]>([]);
+  const [payments, setPayments] = useState<DevicePayment[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [loading, setLoading] = useState(true);
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "active":
-        return <CheckCircle className="h-4 w-4 text-success" />;
-      case "expired":
-        return <AlertTriangle className="h-4 w-4 text-destructive" />;
-      case "warning":
-        return <Clock className="h-4 w-4 text-warning" />;
-      default:
-        return null;
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      // Load device subscriptions
+      const { data: subsData } = await supabase
+        .from('device_subscriptions')
+        .select(`
+          *,
+          subscription_plans (name, price)
+        `)
+        .order('created_at', { ascending: false });
+
+      // Load device payments
+      const { data: paymentsData } = await supabase
+        .from('device_payments')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (subsData) setSubscriptions(subsData);
+      if (paymentsData) setPayments(paymentsData);
+    } catch (error) {
+      console.error('Error loading data:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load user data',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "active":
-        return <Badge className="bg-success text-white">Active</Badge>;
-      case "expired":
-        return <Badge className="bg-destructive text-white">Expired</Badge>;
-      case "warning":
-        return <Badge className="bg-warning text-white">Expiring</Badge>;
-      default:
-        return <Badge variant="secondary">Unknown</Badge>;
+  const disconnectDevice = async (subscriptionId: string, deviceId: string) => {
+    try {
+      const { error } = await supabase
+        .from('device_subscriptions')
+        .update({ status: 'cancelled' })
+        .eq('id', subscriptionId);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Device Disconnected',
+        description: `Device ${deviceId} has been disconnected`,
+      });
+
+      loadData();
+    } catch (error) {
+      console.error('Error disconnecting device:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to disconnect device',
+        variant: 'destructive',
+      });
     }
   };
 
-  const filteredUsers = users.filter(user => {
-    const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         user.phone.includes(searchTerm);
-    const matchesFilter = filterStatus === "all" || user.status === filterStatus;
-    return matchesSearch && matchesFilter;
-  });
+  const filteredSubscriptions = subscriptions.filter(sub =>
+    sub.device_id.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
-  const handleDisconnectUser = (userId: string) => {
-    setUsers(prev => prev.map(user => 
-      user.id === userId 
-        ? { ...user, status: "expired" as const, connectedAt: undefined }
-        : user
-    ));
-    toast({
-      title: "User Disconnected",
-      description: "User has been disconnected from the network",
-    });
+  const getStatusBadge = (status: string, expiresAt: string) => {
+    const isExpired = new Date(expiresAt) < new Date();
+    
+    if (status === 'cancelled') {
+      return <Badge variant="destructive">Cancelled</Badge>;
+    } else if (isExpired) {
+      return <Badge variant="secondary">Expired</Badge>;
+    } else if (status === 'active') {
+      return <Badge variant="default">Active</Badge>;
+    } else {
+      return <Badge variant="outline">Pending</Badge>;
+    }
   };
 
-  const handleExtendUser = (userId: string) => {
-    setUsers(prev => prev.map(user => 
-      user.id === userId 
-        ? { 
-            ...user, 
-            status: "active" as const, 
-            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-            connectedAt: new Date()
-          }
-        : user
-    ));
-    toast({
-      title: "User Extended",
-      description: "User subscription has been extended by 1 day",
-    });
+  const formatTime = (dateString: string) => {
+    return new Date(dateString).toLocaleString();
   };
 
-  const getTimeRemaining = (expiresAt: Date) => {
+  const getTimeRemaining = (expiresAt: string) => {
     const now = new Date();
-    const remaining = expiresAt.getTime() - now.getTime();
-    if (remaining <= 0) return "Expired";
-    
-    const hours = Math.floor(remaining / (1000 * 60 * 60));
-    const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
-    
-    if (hours > 24) {
-      const days = Math.floor(hours / 24);
-      return `${days}d ${hours % 24}h`;
-    }
-    return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+    const expires = new Date(expiresAt);
+    const diff = expires.getTime() - now.getTime();
+
+    if (diff <= 0) return 'Expired';
+
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+    return `${hours}h ${minutes}m`;
   };
 
-  const stats = {
-    total: users.length,
-    active: users.filter(u => u.status === "active").length,
-    warning: users.filter(u => u.status === "warning").length,
-    expired: users.filter(u => u.status === "expired").length,
-  };
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="text-center">
+          <Wifi className="h-8 w-8 text-primary mx-auto mb-4 animate-pulse" />
+          <p className="text-muted-foreground">Loading user data...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-2xl flex items-center gap-2">
-            <Users className="h-6 w-6" />
-            User Management
-          </DialogTitle>
-          <DialogDescription>
-            Monitor and manage all WiFi users and their subscriptions
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-6">
-          {/* Stats Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Card>
-              <CardContent className="p-4 text-center">
-                <div className="text-2xl font-bold text-primary">{stats.total}</div>
-                <div className="text-sm text-muted-foreground">Total Users</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4 text-center">
-                <div className="text-2xl font-bold text-success">{stats.active}</div>
-                <div className="text-sm text-muted-foreground">Active</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4 text-center">
-                <div className="text-2xl font-bold text-warning">{stats.warning}</div>
-                <div className="text-sm text-muted-foreground">Expiring</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4 text-center">
-                <div className="text-2xl font-bold text-destructive">{stats.expired}</div>
-                <div className="text-sm text-muted-foreground">Expired</div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Search and Filter */}
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="flex-1">
-              <Label htmlFor="search">Search Users</Label>
-              <div className="relative mt-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="search"
-                  placeholder="Search by name or phone..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-            <div>
-              <Label htmlFor="filter">Filter Status</Label>
-              <select
-                id="filter"
-                className="mt-1 block w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-              >
-                <option value="all">All Status</option>
-                <option value="active">Active</option>
-                <option value="warning">Expiring</option>
-                <option value="expired">Expired</option>
-              </select>
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Wifi className="h-5 w-5" />
+            Connected Devices
+          </CardTitle>
+          <CardDescription>
+            Manage device subscriptions and monitor usage
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="mb-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by device ID..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
             </div>
           </div>
 
-          {/* Users Table */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Users ({filteredUsers.length})</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>User</TableHead>
-                      <TableHead>Plan</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Time Remaining</TableHead>
-                      <TableHead>Total Paid</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredUsers.map((user) => (
-                      <TableRow key={user.id}>
-                        <TableCell>
-                          <div>
-                            <div className="font-medium">{user.name}</div>
-                            <div className="text-sm text-muted-foreground flex items-center gap-1">
-                              <Phone className="h-3 w-3" />
-                              {user.phone}
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">
-                            {user.plan.charAt(0).toUpperCase() + user.plan.slice(1)}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            {getStatusIcon(user.status)}
-                            {getStatusBadge(user.status)}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="text-sm">
-                            {getTimeRemaining(user.expiresAt)}
-                          </div>
-                        </TableCell>
-                        <TableCell>
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Device ID</TableHead>
+                  <TableHead>Plan</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Time Remaining</TableHead>
+                  <TableHead>Expires At</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredSubscriptions.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8">
+                      <div className="text-muted-foreground">
+                        No devices found
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredSubscriptions.map((subscription) => (
+                    <TableRow key={subscription.id}>
+                      <TableCell className="font-mono text-sm">
+                        {subscription.device_id}
+                      </TableCell>
+                      <TableCell>
+                        <div>
                           <div className="font-medium">
-                            UGX {user.totalPaid.toLocaleString()}
+                            {subscription.subscription_plans?.name}
                           </div>
-                        </TableCell>
-                        <TableCell>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="sm">
-                                <MoreVertical className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                              <DropdownMenuSeparator />
-                              {user.status === "active" && (
-                                <DropdownMenuItem 
-                                  onClick={() => handleDisconnectUser(user.id)}
-                                  className="text-destructive"
-                                >
-                                  Disconnect User
-                                </DropdownMenuItem>
-                              )}
-                              {user.status !== "active" && (
-                                <DropdownMenuItem 
-                                  onClick={() => handleExtendUser(user.id)}
-                                  className="text-success"
-                                >
-                                  Extend 1 Day
-                                </DropdownMenuItem>
-                              )}
-                              <DropdownMenuItem>View Details</DropdownMenuItem>
-                              <DropdownMenuItem>Send Message</DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                          <div className="text-sm text-muted-foreground">
+                            UGX {subscription.subscription_plans?.price}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {getStatusBadge(subscription.status, subscription.expires_at)}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <Clock className="h-4 w-4 text-muted-foreground" />
+                          {getTimeRemaining(subscription.expires_at)}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {formatTime(subscription.expires_at)}
+                      </TableCell>
+                      <TableCell>
+                        {subscription.status === 'active' && 
+                         new Date(subscription.expires_at) > new Date() && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => disconnectDevice(subscription.id, subscription.device_id)}
+                            className="flex items-center gap-1"
+                          >
+                            <Ban className="h-4 w-4" />
+                            Disconnect
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
 
-              {filteredUsers.length === 0 && (
-                <div className="text-center py-8">
-                  <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-muted-foreground">No users found matching your criteria</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </DialogContent>
-    </Dialog>
+      <Card>
+        <CardHeader>
+          <CardTitle>Recent Payments</CardTitle>
+          <CardDescription>
+            Track all payment transactions
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Device ID</TableHead>
+                  <TableHead>Amount</TableHead>
+                  <TableHead>Method</TableHead>
+                  <TableHead>Phone</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Date</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {payments.slice(0, 10).map((payment) => (
+                  <TableRow key={payment.id}>
+                    <TableCell className="font-mono text-sm">
+                      {payment.device_id}
+                    </TableCell>
+                    <TableCell>UGX {payment.amount}</TableCell>
+                    <TableCell className="capitalize">
+                      {payment.payment_method}
+                    </TableCell>
+                    <TableCell>
+                      {payment.metadata?.phone_number || '-'}
+                    </TableCell>
+                    <TableCell>
+                      <Badge 
+                        variant={
+                          payment.status === 'completed' 
+                            ? 'default' 
+                            : payment.status === 'failed' 
+                            ? 'destructive' 
+                            : 'outline'
+                        }
+                      >
+                        {payment.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {formatTime(payment.created_at)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

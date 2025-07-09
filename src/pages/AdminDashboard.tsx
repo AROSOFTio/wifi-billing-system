@@ -16,6 +16,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
+import { UserManagement } from '@/components/wifi/UserManagement';
 
 interface AdminStats {
   totalUsers: number;
@@ -49,13 +50,13 @@ export default function AdminDashboard() {
 
       // Get active subscriptions
       const { count: activeSubscriptions } = await supabase
-        .from('user_subscriptions')
+        .from('device_subscriptions')
         .select('*', { count: 'exact', head: true })
         .eq('status', 'active');
 
       // Get total revenue
       const { data: payments } = await supabase
-        .from('payments')
+        .from('device_payments')
         .select('amount, created_at')
         .eq('status', 'completed');
 
@@ -69,7 +70,7 @@ export default function AdminDashboard() {
 
       // Get pending payments
       const { count: pendingPayments } = await supabase
-        .from('payments')
+        .from('device_payments')
         .select('*', { count: 'exact', head: true })
         .eq('status', 'pending');
 
@@ -232,15 +233,7 @@ export default function AdminDashboard() {
         </TabsContent>
 
         <TabsContent value="users">
-          <Card>
-            <CardHeader>
-              <CardTitle>User Management</CardTitle>
-              <CardDescription>Manage user accounts and subscriptions</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">User management interface will be implemented here</p>
-            </CardContent>
-          </Card>
+          <UserManagement />
         </TabsContent>
 
         <TabsContent value="payments">

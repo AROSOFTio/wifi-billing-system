@@ -18,9 +18,16 @@ import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
 interface PaymentOptionsProps {
-  onClose: () => void;
-  onPaymentSuccess: (plan: string) => void;
+  plans: SubscriptionPlan[];
   deviceId: string;
+  onPaymentSuccess: () => void;
+}
+
+interface SubscriptionPlan {
+  id: string;
+  name: string;
+  duration_hours: number;
+  price: number;
 }
 
 interface Plan {
@@ -70,43 +77,13 @@ const paymentMethods = [
   },
 ];
 
-export function PaymentOptions({ onClose, onPaymentSuccess, deviceId }: PaymentOptionsProps) {
-  const [plans, setPlans] = useState<Plan[]>([]);
-  const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
+export function PaymentOptions({ plans, deviceId, onPaymentSuccess }: PaymentOptionsProps) {
+  const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan | null>(null);
   const [selectedPayment, setSelectedPayment] = useState<string | null>(null);
   const [phoneNumber, setPhoneNumber] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
 
-  useEffect(() => {
-    fetchPlans();
-  }, []);
-
-  const fetchPlans = async () => {
-    try {
-      const { data } = await supabase
-        .from('subscription_plans')
-        .select('*')
-        .eq('is_active', true)
-        .order('price', { ascending: true });
-
-      if (data) {
-        const formattedPlans = data.map((plan, index) => ({
-          ...plan,
-          popular: index === 1, // Make second plan popular
-          icon: getIconForPlan(plan.name)
-        }));
-        setPlans(formattedPlans);
-      }
-    } catch (error) {
-      toast({
-        title: 'Error loading plans',
-        description: 'Could not fetch subscription plans',
-        variant: 'destructive'
-      });
-    }
-  };
-
-  const handlePlanSelect = (plan: Plan) => {
+  const handlePlanSelect = (plan: SubscriptionPlan) => {
     setSelectedPlan(plan);
   };
 
@@ -153,7 +130,7 @@ export function PaymentOptions({ onClose, onPaymentSuccess, deviceId }: PaymentO
         description: `Your ${selectedPlan.name} has been activated. You will be connected automatically.`,
       });
       
-      onPaymentSuccess(selectedPlan.id);
+      onPaymentSuccess();
     } catch (error: any) {
       toast({
         title: "Payment Failed",
@@ -166,38 +143,37 @@ export function PaymentOptions({ onClose, onPaymentSuccess, deviceId }: PaymentO
   };
 
   return (
-    <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-2xl">Choose Your Internet Plan</DialogTitle>
-          <DialogDescription>
-            Select a plan and payment method to get connected instantly
-          </DialogDescription>
-        </DialogHeader>
-
+    <Card>
+      <CardHeader>
+        <CardTitle>Choose Your Internet Plan</CardTitle>
+        <CardDescription>
+          Select a plan and payment method to get connected instantly
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
         <div className="space-y-6">
           {/* Plan Selection */}
           <div>
             <h3 className="text-lg font-semibold mb-4">1. Select Your Plan</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {plans.map((plan) => (
+              {plans.map((plan, index) => (
                 <Card 
                   key={plan.id}
                   className={`cursor-pointer transition-all hover:shadow-md ${
                     selectedPlan?.id === plan.id 
                       ? "border-primary bg-primary/5" 
                       : "border-border"
-                  } ${plan.popular ? "border-2 border-secondary" : ""}`}
+                  } ${index === 1 ? "border-2 border-secondary" : ""}`}
                   onClick={() => handlePlanSelect(plan)}
                 >
-                  {plan.popular && (
+                  {index === 1 && (
                     <div className="bg-secondary text-secondary-foreground text-xs font-medium px-3 py-1 rounded-b-md text-center">
                       Most Popular
                     </div>
                   )}
                   <CardHeader className="text-center pb-2">
                     <div className="flex justify-center mb-2">
-                      {plan.icon}
+                      {getIconForPlan(plan.name)}
                     </div>
                     <CardTitle className="text-lg">{plan.name}</CardTitle>
                     <CardDescription>{plan.duration_hours} Hours</CardDescription>
@@ -291,27 +267,17 @@ export function PaymentOptions({ onClose, onPaymentSuccess, deviceId }: PaymentO
                 </div>
               </div>
 
-              <div className="flex gap-3">
-                <Button 
-                  variant="outline" 
-                  onClick={onClose}
-                  className="flex-1"
-                  disabled={isProcessing}
-                >
-                  Cancel
-                </Button>
-                <Button 
-                  onClick={handlePayment}
-                  className="flex-1"
-                  disabled={isProcessing}
-                >
-                  {isProcessing ? "Processing..." : `Pay UGX ${selectedPlan.price.toLocaleString()}`}
-                </Button>
-              </div>
+              <Button 
+                onClick={handlePayment}
+                className="w-full"
+                disabled={isProcessing}
+              >
+                {isProcessing ? "Processing..." : `Pay UGX ${selectedPlan.price.toLocaleString()}`}
+              </Button>
             </div>
-          )}
+           )}
         </div>
-      </DialogContent>
-    </Dialog>
+      </CardContent>
+    </Card>
   );
 }

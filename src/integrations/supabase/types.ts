@@ -14,6 +14,86 @@ export type Database = {
   }
   public: {
     Tables: {
+      device_payments: {
+        Row: {
+          amount: number
+          created_at: string | null
+          currency: string | null
+          device_id: string
+          id: string
+          metadata: Json | null
+          payment_method: string
+          payment_reference: string | null
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          amount: number
+          created_at?: string | null
+          currency?: string | null
+          device_id: string
+          id?: string
+          metadata?: Json | null
+          payment_method: string
+          payment_reference?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          amount?: number
+          created_at?: string | null
+          currency?: string | null
+          device_id?: string
+          id?: string
+          metadata?: Json | null
+          payment_method?: string
+          payment_reference?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      device_subscriptions: {
+        Row: {
+          created_at: string | null
+          device_id: string
+          expires_at: string | null
+          id: string
+          plan_id: string | null
+          starts_at: string | null
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          device_id: string
+          expires_at?: string | null
+          id?: string
+          plan_id?: string | null
+          starts_at?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          device_id?: string
+          expires_at?: string | null
+          id?: string
+          plan_id?: string | null
+          starts_at?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "device_subscriptions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "subscription_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payments: {
         Row: {
           amount: number
