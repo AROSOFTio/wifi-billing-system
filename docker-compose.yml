@@ -1,0 +1,12 @@
+version: '3'
+services:
+  wifi-app:
+    image: node:18
+    container_name: wifi-billing
+    working_dir: /app
+    volumes:
+      - .:/app
+    ports:
+      - "3001:3000"
+    command: sh -c "npm install && npm run build && npm install -g serve && serve -s build -l 3000"
+    restart: always
